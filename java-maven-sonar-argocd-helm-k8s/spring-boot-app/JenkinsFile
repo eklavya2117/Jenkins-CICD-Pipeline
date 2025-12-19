@@ -13,18 +13,17 @@ agent {
         //git branch: 'main', url: 'https://github.com/iam-veeramalla/Jenkins-Zero-To-Hero.git'
       }
     }
-    stage('Build and Test') {
-steps {
-    sh '''
-
-      apt-get update
-      apt-get install -y docker.io
-
-      cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
-      rm -rf target || true
-      mvn clean package
-    '''
-  }
+stage('Build and Test') {
+    steps {
+        script {
+            docker.image('maven:3.9.6-eclipse-temurin-17').inside {
+                sh '''
+                  cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+                  mvn clean package
+                '''
+            }
+        }
+    }
 }
     stage('Static Code Analysis') {
       environment {
@@ -53,26 +52,20 @@ steps {
       }
     }
 stage('Update Deployment File') {
-    environment {
-        GIT_REPO_NAME = "Jenkins-CICD-Pipeline"
-        GIT_USER_NAME = "eklavya2117"
-    }
     steps {
         withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
-            script {
-                // Run inside a docker container but mount the workspace
-                docker.image('maven:3.9.6-eclipse-temurin-17').inside("-v ${env.WORKSPACE}:${env.WORKSPACE} -w ${env.WORKSPACE}") {
-                    sh '''
-                        git config user.email "chauhan.pravin.7112@gmail.com"
-                        git config user.name "eklavya2117"
-                        BUILD_NUMBER=${BUILD_NUMBER}
-                        sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-                        git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-                        git commit -m "Update deployment image to version ${BUILD_NUMBER}"
-                        git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
-                    '''
-                }
-            }
+            sh '''
+              cd $WORKSPACE
+              git config user.email "chauhan.pravin.7112@gmail.com"
+              git config user.name "eklavya2117"
+
+              sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" \
+              java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
+
+              git add .
+              git commit -m "Update image tag ${BUILD_NUMBER}"
+              git push https://${GITHUB_TOKEN}@github.com/eklavya2117/Jenkins-CICD-Pipeline.git HEAD:main
+            '''
         }
     }
 }
