@@ -64,13 +64,9 @@ stage('Update Kubernetes Manifest') {
       sh '''
         set -e
 
-        echo "Workspace: $WORKSPACE"
-
-        # FIX Git dubious ownership
         git config --global --add safe.directory "$WORKSPACE"
 
         git checkout main
-
         git pull origin main
 
         git config user.email "chauhan.pravin.7112@gmail.com"
@@ -80,8 +76,10 @@ stage('Update Kubernetes Manifest') {
           java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
 
         git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-        git commit -m "Update image tag to ${BUILD_NUMBER}"
-        git push https://${GITHUB_TOKEN}@github.com/eklavya2117/Jenkins-CICD-Pipeline.git HEAD:main
+
+        git commit -m "Update image tag to ${BUILD_NUMBER}" || echo "No changes to commit"
+
+        git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git main
       '''
     }
   }
