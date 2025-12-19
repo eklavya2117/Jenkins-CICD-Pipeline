@@ -52,26 +52,28 @@ steps {
         }
       }
     }
-    stage('Update Deployment File') {
+   stage('Update Deployment File') {
+    agent {
+        docker {
+            image 'maven:3.9.6-eclipse-temurin-17'
+            args '-v /var/lib/jenkins/workspace/mycicdpipeline:/var/lib/jenkins/workspace/mycicdpipeline'
+        }
+    }
     environment {
         GIT_REPO_NAME = "Jenkins-CICD-Pipeline"
         GIT_USER_NAME = "eklavya2117"
     }
     steps {
-        docker.image('maven:3.9.6-eclipse-temurin-17').inside(
-            '-v /var/lib/jenkins/workspace/mycicdpipeline:/var/lib/jenkins/workspace/mycicdpipeline'
-        ) {
-            dir('java-maven-sonar-argocd-helm-k8s/spring-boot-app') {
-                withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
-                    sh '''
-                        git config user.email "chauhan.pravin.7112@gmail.com"
-                        git config user.name "eklavya2117"
-                        sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" ../spring-boot-app-manifests/deployment.yml
-                        git add ../spring-boot-app-manifests/deployment.yml
-                        git commit -m "Update deployment image to version ${BUILD_NUMBER}"
-                        git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
-                    '''
-                }
+        dir('java-maven-sonar-argocd-helm-k8s/spring-boot-app') {
+            withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
+                sh '''
+                    git config user.email "chauhan.pravin.7112@gmail.com"
+                    git config user.name "eklavya2117"
+                    sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" ../spring-boot-app-manifests/deployment.yml
+                    git add ../spring-boot-app-manifests/deployment.yml
+                    git commit -m "Update deployment image to version ${BUILD_NUMBER}"
+                    git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
+                '''
             }
         }
     }
