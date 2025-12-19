@@ -46,7 +46,7 @@ pipeline {
       }
     }
 stage('Update Deployment File') {
-    agent any  // run on host, not inside Docker
+    agent any  
     environment {
         GIT_REPO_NAME = "Jenkins-CICD-Pipeline"
         GIT_USER_NAME = "eklavya2117"
