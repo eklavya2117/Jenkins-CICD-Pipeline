@@ -1,26 +1,20 @@
 pipeline {
-  agent {
-    docker {
-      image 'maven:3.9.6-eclipse-temurin-17'
-      args '-v /var/run/docker.sock:/var/run/docker.sock -u root'
-      reuseNode true
-    }
-  }
+  agent none
 
   environment {
     DOCKER_IMAGE = "eklavya2117/ultimate-cicd"
-    SONAR_URL    = "http://16.170.233.220:9000"
+    SONAR_URL = "http://16.170.233.220:9000"
   }
 
   stages {
 
-    stage('Checkout') {
-      steps {
-        echo 'Checkout completed'
+    stage('Build & Test (Maven Container)') {
+      agent {
+        docker {
+          image 'maven:3.9.6-eclipse-temurin-17'
+          reuseNode true
+        }
       }
-    }
-
-    stage('Build and Test') {
       steps {
         sh '''
           cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
@@ -29,7 +23,13 @@ pipeline {
       }
     }
 
-    stage('Static Code Analysis') {
+    stage('Sonar Analysis') {
+      agent {
+        docker {
+          image 'maven:3.9.6-eclipse-temurin-17'
+          reuseNode true
+        }
+      }
       steps {
         withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
           sh '''
@@ -42,7 +42,8 @@ pipeline {
       }
     }
 
-    stage('Build and Push Docker Image') {
+    stage('Build & Push Docker Image (HOST)') {
+      agent { label 'master' }   // or built-in
       steps {
         withCredentials([usernamePassword(
           credentialsId: 'docker-cred',
@@ -50,8 +51,7 @@ pipeline {
           passwordVariable: 'DOCKER_PASS'
         )]) {
           sh '''
-            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-
+            docker login -u "$DOCKER_USER" -p "$DOCKER_PASS"
             cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
             docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} .
             docker push ${DOCKER_IMAGE}:${BUILD_NUMBER}
@@ -61,6 +61,7 @@ pipeline {
     }
 
     stage('Update Deployment File') {
+      agent { label 'master' }
       steps {
         withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
           sh '''
@@ -71,20 +72,11 @@ pipeline {
               java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
 
             git add .
-            git commit -m "Update image tag ${BUILD_NUMBER}" || echo "No changes to commit"
+            git commit -m "Update image tag ${BUILD_NUMBER}" || true
             git push https://${GITHUB_TOKEN}@github.com/eklavya2117/Jenkins-CICD-Pipeline.git HEAD:main
           '''
         }
       }
-    }
-  }
-
-  post {
-    success {
-      echo "Pipeline completed successfully 🎉"
-    }
-    failure {
-      echo "Pipeline failed ❌"
     }
   }
 }
