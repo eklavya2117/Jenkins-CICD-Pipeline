@@ -16,6 +16,10 @@ agent {
     stage('Build and Test') {
 steps {
     sh '''
+
+      apt-get update
+      apt-get install -y docker.io
+
       cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
       rm -rf target || true
       mvn clean package
