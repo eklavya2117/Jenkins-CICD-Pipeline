@@ -15,22 +15,24 @@ pipeline {
             }
         }
 
-        stage('Build and Test') {
-            agent {
-                docker {
-                    image 'maven:3.9.6-eclipse-temurin-17'
-                    args '-u root'
-                    reuseNode true
-                }
-            }
-            steps {
-                sh '''
-                    cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
-                    rm -rf target || true
-                    mvn clean package
-                '''
-            }
+stage('Build and Test') {
+    agent {
+        docker {
+            image 'maven:3.9.6-eclipse-temurin-17'
+            args '-u root'
+            reuseNode true
         }
+    }
+    steps {
+        sh '''
+            cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+            rm -rf target || true
+            mvn clean package
+            cp target/*.jar target/spring-boot-web.jar
+        '''
+    }
+}
+
 
         stage('Static Code Analysis') {
             agent {
