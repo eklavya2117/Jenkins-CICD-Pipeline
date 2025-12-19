@@ -1,45 +1,44 @@
 pipeline {
-    agent any  // the main agent
+    agent any
+
     environment {
-        DOCKER_IMAGE = "eklavya2117/ultimate-cicd:${BUILD_NUMBER}"
         SONAR_URL = "http://16.170.233.220:9000"
+        DOCKER_IMAGE = "eklavya2117/ultimate-cicd:${BUILD_NUMBER}"
         GIT_REPO_NAME = "Jenkins-CICD-Pipeline"
         GIT_USER_NAME = "eklavya2117"
     }
-    stages {
 
+    stages {
         stage('Checkout') {
             steps {
-                // Checkout your code
-                git branch: 'main', url: 'https://github.com/eklavya2117/Jenkins-CICD-Pipeline.git'
+                checkout([$class: 'GitSCM', 
+                          branches: [[name: '*/main']], 
+                          userRemoteConfigs: [[url: 'https://github.com/eklavya2117/Jenkins-CICD-Pipeline.git']]])
             }
         }
 
-stage('Build and Test') {
-    agent {
-        docker {
-            image 'maven:3.9.6-eclipse-temurin-17'
-            args '-u root'
-            reuseNode true
+        stage('Build and Test') {
+            agent {
+                docker {
+                    image 'maven:3.9.6-eclipse-temurin-17'
+                    args '-u root'
+                }
+            }
+            steps {
+                sh '''
+                    cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+                    mvn clean package
+                    export JAR_FILE=$(ls target/*.jar | head -n 1)
+                    echo "JAR_FILE=${JAR_FILE}" > $WORKSPACE/jar_file.txt
+                '''
+            }
         }
-    }
-    steps {
-        sh '''
-            cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
-            rm -rf target || true
-            mvn clean package
-            cp target/*.jar target/spring-boot-web.jar
-        '''
-    }
-}
-
 
         stage('Static Code Analysis') {
             agent {
                 docker {
                     image 'maven:3.9.6-eclipse-temurin-17'
                     args '-u root'
-                    reuseNode true
                 }
             }
             steps {
@@ -53,31 +52,32 @@ stage('Build and Test') {
         }
 
         stage('Build and Push Docker Image') {
-            agent any  // run on host
+            agent { label 'docker-host' } // run on host with Docker installed
             steps {
-                withCredentials([usernamePassword(credentialsId: 'docker-cred', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    sh '''
+                script {
+                    def jarFile = readFile('jar_file.txt').trim()
+                    sh """
                         cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
-                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                        docker build -t ${DOCKER_IMAGE} .
+                        docker login -u eklavya2117 -p $DOCKER_PASS
+                        docker build --build-arg artifact=${jarFile} -t ${DOCKER_IMAGE} .
                         docker push ${DOCKER_IMAGE}
-                    '''
+                    """
                 }
             }
         }
 
         stage('Update Deployment File') {
-            agent any  // run on host
             steps {
                 withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
                     sh '''
-                        cd $WORKSPACE
                         git config user.email "chauhan.pravin.7112@gmail.com"
-                        git config user.name "${GIT_USER_NAME}"
+                        git config user.name "eklavya2117"
+
                         sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
+
                         git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-                        git commit -m "Update deployment image to version ${BUILD_NUMBER}"
-                        git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git HEAD:main
+                        git commit -m "Update deployment image to version ${BUILD_NUMBER}" || echo "No changes to commit"
+                        git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
                     '''
                 }
             }
@@ -85,8 +85,11 @@ stage('Build and Test') {
     }
 
     post {
+        always {
+            echo "Pipeline finished"
+        }
         success {
-            echo "Pipeline completed ✅"
+            echo "Pipeline succeeded ✅"
         }
         failure {
             echo "Pipeline failed ❌"
