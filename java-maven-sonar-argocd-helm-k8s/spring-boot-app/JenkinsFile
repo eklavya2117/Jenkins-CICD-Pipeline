@@ -58,13 +58,16 @@ stage('Checkout') {
         }
       }
     }
-
-    stage('Update Kubernetes Manifest') {
+stage('Update Kubernetes Manifest') {
   steps {
     withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
       sh '''
-        pwd
-        ls -la
+        set -e
+
+        echo "Workspace: $WORKSPACE"
+
+        # FIX Git dubious ownership
+        git config --global --add safe.directory "$WORKSPACE"
 
         git status
 
@@ -75,7 +78,7 @@ stage('Checkout') {
           java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
 
         git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-        git commit -m "Update image to ${BUILD_NUMBER}"
+        git commit -m "Update image tag to ${BUILD_NUMBER}"
         git push https://${GITHUB_TOKEN}@github.com/eklavya2117/Jenkins-CICD-Pipeline.git HEAD:main
       '''
     }
